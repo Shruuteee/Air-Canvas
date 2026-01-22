@@ -1,17 +1,26 @@
 import cv2
 import mediapipe as mp
 import numpy as np
+from mediapipe.tasks import python as mp_tasks
+from mediapipe.tasks.python import vision as mp_vision
 
 cap = cv2.VideoCapture(0)
 
-mp_hands = mp.solutions.hands
-mp_draw = mp.solutions.drawing_utils
+# Create HandLandmarker
+HandLandmarker = mp_vision.HandLandmarker
+HandLandmarkerOptions = mp_vision.HandLandmarkerOptions
+HandLandmarkerResult = mp_vision.HandLandmarkerResult
 
-hands = mp_hands.Hands(
-    max_num_hands=1,
-    min_detection_confidence=0.6,
+options = HandLandmarkerOptions(
+    base_options=mp_tasks.BaseOptions(model_asset_path="hand_landmarker.task"),
+    running_mode=mp_vision.RunningMode.IMAGE,
+    num_hands=1,
+    min_hand_detection_confidence=0.6,
+    min_hand_presence_confidence=0.6,
     min_tracking_confidence=0.6
 )
+
+hand_landmarker = HandLandmarker.create_from_options(options)
 
 # Canvas
 canvas = None
@@ -57,20 +66,25 @@ while True:
 
     draw_palette(frame)
 
-    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    results = hands.process(rgb)
+    mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=frame)
+    results = hand_landmarker.detect(mp_image)
 
     mode = "NONE"
 
-    if results.multi_hand_landmarks:
-        for hand in results.multi_hand_landmarks:
+    if results.hand_landmarks:
+        for hand in results.hand_landmarks:
 
-            mp_draw.draw_landmarks(frame, hand, mp_hands.HAND_CONNECTIONS)
+            # Draw landmarks manually or use drawing utils if available
+            for landmark in hand:
+                x_lm = int(landmark.x * w)
+                y_lm = int(landmark.y * h)
+                cv2.circle(frame, (x_lm, y_lm), 2, (0, 255, 0), -1)
 
-            index_up, middle_up = fingers_up(hand)
+            index_up = hand[8].y < hand[6].y
+            middle_up = hand[12].y < hand[10].y
 
-            x = int(hand.landmark[8].x * w)
-            y = int(hand.landmark[8].y * h)
+            x = int(hand[8].x * w)
+            y = int(hand[8].y * h)
 
             # Selection mode
             if index_up and middle_up:
@@ -126,6 +140,3 @@ while True:
 
 cap.release()
 cv2.destroyAllWindows()
-
-
-
